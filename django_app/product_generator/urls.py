@@ -1,0 +1,17 @@
+"""
+URL configuration for product_generator project.
+"""
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('generator.urls')),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Serve Data directory (pictos) and backgrounds in development
+if settings.DEBUG:
+    urlpatterns += static('/data/', document_root=settings.BASE_DIR / 'Data')
+    urlpatterns += static('/backgrounds/', document_root=settings.BASE_DIR / 'backgrounds') 

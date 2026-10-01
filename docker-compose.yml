@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    container_name: product-web
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    working_dir: /app/django_app
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    # SQLite is used by default (no DB_ENGINE needed, or set DB_ENGINE=sqlite)
+    environment:
+      - DB_ENGINE=sqlite
+    restart: unless-stopped
+
+

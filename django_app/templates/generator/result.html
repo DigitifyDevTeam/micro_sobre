@@ -1,0 +1,975 @@
+{% extends 'base.html' %}
+
+{% block title %}Product Icon Generator - Result{% endblock %}
+
+{% block content %}
+<style>
+    .preview-container {
+        background: #1a1a2e;
+        border-radius: 15px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    .preview-canvas-wrapper {
+        position: relative;
+        display: inline-block;
+        border: 3px solid #667eea;
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: move;
+        width: 480px;  /* Fixed width: 800 * 0.6 = 480px */
+        height: 480px; /* Fixed height: 800 * 0.6 = 480px */
+    }
+    #previewCanvas {
+        display: block;
+        width: 480px !important;  /* Fixed display width */
+        height: 480px !important; /* Fixed display height */
+    }
+    .preview-controls {
+        background: rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 15px;
+    }
+    .preview-controls label {
+        color: #fff;
+        font-weight: 500;
+    }
+    .preview-controls input[type="number"] {
+        background: rgba(255,255,255,0.9);
+        border: 2px solid #667eea;
+        border-radius: 8px;
+        padding: 8px 12px;
+        width: 100px;
+        font-weight: 600;
+    }
+    .preview-controls .form-check-label {
+        color: #ccc;
+    }
+    .preview-title {
+        color: #fff;
+        font-size: 1.2rem;
+        margin-bottom: 15px;
+    }
+    .btn-preview {
+        border-radius: 25px;
+        padding: 10px 25px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .btn-edit {
+        background: linear-gradient(45deg, #f39c12, #e74c3c);
+        border: none;
+        color: white;
+    }
+    .btn-edit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(243, 156, 18, 0.4);
+        color: white;
+    }
+    .btn-reset {
+        background: linear-gradient(45deg, #95a5a6, #7f8c8d);
+        border: none;
+        color: white;
+    }
+    .btn-download-custom {
+        background: linear-gradient(45deg, #27ae60, #2ecc71);
+        border: none;
+        color: white;
+    }
+    .btn-mirror {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        color: white;
+    }
+    .btn-mirror:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+    .btn-mirror.active {
+        background: linear-gradient(45deg, #764ba2, #667eea);
+        box-shadow: 0 0 10px rgba(102, 126, 234, 0.6);
+    }
+    .editing-hint {
+        color: #a0a0a0;
+        font-size: 0.85rem;
+        margin-top: 10px;
+    }
+    
+    /* Position Indicator Styles - Modern Glassmorphism */
+    .position-indicator {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        background: linear-gradient(135deg, rgba(15, 15, 25, 0.92), rgba(25, 25, 45, 0.88));
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 16px;
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+        font-size: 13px;
+        color: #fff;
+        opacity: 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.4),
+            0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+            0 1px 0 rgba(255, 255, 255, 0.1) inset;
+    }
+    .position-indicator.visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    .position-indicator.snapped {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.92), rgba(5, 150, 105, 0.88));
+        border-color: rgba(52, 211, 153, 0.5);
+        box-shadow: 
+            0 8px 32px rgba(16, 185, 129, 0.3),
+            0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+            0 0 30px rgba(16, 185, 129, 0.2);
+    }
+    .position-indicator .coord {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .position-indicator .coord-label {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 500;
+    }
+    .position-indicator .coord-value {
+        color: #a78bfa;
+        font-weight: 700;
+        font-size: 14px;
+        min-width: 45px;
+        text-align: right;
+    }
+    .position-indicator.snapped .coord-value {
+        color: #fff;
+    }
+    .position-indicator .divider {
+        width: 1px;
+        height: 24px;
+        background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.2), transparent);
+    }
+    .position-indicator .snap-icon {
+        display: none;
+        color: #34d399;
+        font-size: 16px;
+    }
+    .position-indicator.snapped .snap-icon {
+        display: inline-flex;
+        animation: snapPulse 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes snapPulse {
+        0% { transform: scale(1.8); opacity: 0; }
+        60% { transform: scale(0.95); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    
+    /* Distance Badge */
+    .position-indicator .distance-badge {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.7);
+    }
+    .position-indicator .distance-badge strong {
+        color: #fbbf24;
+        font-weight: 600;
+    }
+    .position-indicator.snapped .distance-badge {
+        background: rgba(255, 255, 255, 0.15);
+    }
+    .position-indicator.snapped .distance-badge strong {
+        color: #fff;
+    }
+    
+    /* Guide Toggle Button */
+    .guide-toggle {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(102, 126, 234, 0.4);
+        border-radius: 8px;
+        padding: 6px 12px;
+        color: #fff;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        z-index: 10;
+    }
+    .guide-toggle:hover {
+        background: rgba(102, 126, 234, 0.3);
+        border-color: #667eea;
+    }
+    .guide-toggle.active {
+        background: rgba(102, 126, 234, 0.5);
+        border-color: #667eea;
+    }
+    .guide-toggle i {
+        font-size: 12px;
+    }
+</style>
+
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header bg-success text-white text-center">
+                <h3><i class="fas fa-check-circle me-2"></i>Product Image Generated Successfully!</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Original Image -->
+                    <div class="col-md-6">
+                        <div class="text-center">
+                            <h5 class="mb-3"><i class="fas fa-image me-2"></i>Original Product</h5>
+                            <img src="{{ submission.product_image.url }}" 
+                                 alt="Original Product" 
+                                 class="img-fluid rounded shadow"
+                                 style="max-height: 300px;">
+                        </div>
+                    </div>
+                    
+                    <!-- Generated Image -->
+                    <div class="col-md-6">
+                        <div class="text-center">
+                            <h5 class="mb-3"><i class="fas fa-magic me-2"></i>Generated Result</h5>
+                            <img src="{{ submission.result_image.url }}" 
+                                 alt="Generated Product" 
+                                 class="img-fluid rounded shadow"
+                                 style="max-height: 300px;"
+                                 id="resultImage">
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Preview Editor Section -->
+                <div class="preview-container">
+                    <div class="text-center">
+                        <h4 class="preview-title"><i class="fas fa-edit me-2"></i>Preview Mode - Edit Product Position & Size</h4>
+                        
+                        <div class="preview-canvas-wrapper" id="canvasWrapper">
+                            <canvas id="previewCanvas" width="800" height="800"></canvas>
+                            <button class="guide-toggle active" id="guideToggle" title="Toggle reference guides">
+                                <i class="fas fa-crosshairs"></i>
+                                <span>Guides</span>
+                            </button>
+                            <div class="position-indicator" id="positionIndicator">
+                                <span class="snap-icon"><i class="fas fa-crosshairs"></i></span>
+                                <div class="coord">
+                                    <span class="coord-label">X</span>
+                                    <span class="coord-value" id="deltaX">+0</span>
+                                </div>
+                                <div class="divider"></div>
+                                <div class="coord">
+                                    <span class="coord-label">Y</span>
+                                    <span class="coord-value" id="deltaY">+0</span>
+                                </div>
+                                <div class="divider"></div>
+                                <div class="distance-badge">
+                                    <i class="fas fa-ruler me-1"></i><strong id="distanceValue">0</strong>px
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="preview-controls">
+                            <div class="row justify-content-center align-items-center g-3">
+                                <div class="col-auto">
+                                    <label for="productWidth" class="me-2">Largeur:</label>
+                                    <input type="number" id="productWidth" value="500" min="50" max="700" step="10">
+                                </div>
+                                <div class="col-auto">
+                                    <label for="productHeight" class="me-2">Hauteur:</label>
+                                    <input type="number" id="productHeight" value="500" min="50" max="700" step="10">
+                                </div>
+                                <div class="col-auto">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="lockAspectRatio" checked>
+                                        <label class="form-check-label" for="lockAspectRatio">
+                                            <i class="fas fa-lock me-1"></i>Lock Aspect Ratio
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-sm btn-preview btn-mirror" id="mirrorBtn" onclick="previewEditor.flipHorizontal()" title="Inverser l'image horizontalement">
+                                        <i class="fas fa-arrows-alt-h me-1"></i>Inverser
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <button class="btn btn-preview btn-reset me-2" onclick="previewEditor.reset()">
+                                    <i class="fas fa-undo me-1"></i>Reset to Default
+                                </button>
+                                <button class="btn btn-preview btn-download-custom" onclick="previewEditor.downloadCustom()">
+                                    <i class="fas fa-download me-1"></i>Download Custom
+                                </button>
+                            </div>
+                            <p class="editing-hint"><i class="fas fa-info-circle me-1"></i>Drag the product image to reposition. The reference frame shows original position. Click <strong>Guides</strong> to toggle visibility.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="text-center">
+                    <button onclick="downloadWithRename('{{ submission.result_image.url }}')" 
+                            class="btn btn-success btn-lg me-3">
+                        <i class="fas fa-download me-2"></i>Download Original Result
+                    </button>
+                    <a href="{% url 'home' %}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus me-2"></i>Generate Another
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Download with rename function
+function downloadWithRename(imageUrl) {
+    const urlParts = imageUrl.split('/');
+    let filename = urlParts[urlParts.length - 1];
+    filename = filename.split('?')[0];
+    const baseName = filename.replace(/\.[^/.]+$/, '') || 'result';
+    
+    const userFilename = prompt('Enter filename for download:', baseName);
+    if (userFilename === null) return;
+    
+    const cleanFilename = userFilename.replace(/[<>:"/\\|?*]/g, '_').trim();
+    if (!cleanFilename) {
+        alert('Filename cannot be empty!');
+        return;
+    }
+    
+    const originalExt = filename.match(/\.[^/.]+$/) ? filename.match(/\.[^/.]+$/)[0] : '.webp';
+    const finalFilename = cleanFilename.endsWith(originalExt) ? cleanFilename : cleanFilename + originalExt;
+    
+    fetch(imageUrl)
+        .then(response => response.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = finalFilename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        })
+        .catch(error => {
+            console.error('Download error:', error);
+            alert('Error downloading image. Please try again.');
+        });
+}
+
+// Preview Editor Class
+class PreviewEditor {
+    constructor(canvasId, options) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.options = options;
+        
+        // Canvas dimensions - FIXED and NEVER changes
+        // Internal canvas size is always 800x800 pixels
+        this.canvas.width = 800;  // Fixed internal width
+        this.canvas.height = 800; // Fixed internal height
+        
+        // Display scale (60% for display)
+        this.displayScale = 0.6;
+        this.canvas.style.width = '480px';   // Fixed display width: 800 * 0.6
+        this.canvas.style.height = '480px';  // Fixed display height: 800 * 0.6
+        
+        // Images
+        this.backgroundImg = null;
+        this.productImg = null;
+        this.verticalPictos = [];
+        this.horizontalPictos = [];
+        
+        // Product state
+        this.product = {
+            x: 400, // Center X
+            y: 400, // Center Y
+            width: 500,
+            height: 500,
+            originalWidth: 500,
+            originalHeight: 500,
+            aspectRatio: 1,
+            flipped: false  // Track if image is horizontally flipped
+        };
+        
+        // Original center position (reference frame)
+        this.originalCenter = {
+            x: 400,
+            y: 400
+        };
+        
+        // FIXED reference frame - ALWAYS 450x450, NEVER changes
+        // These values are immutable and will never be modified
+        this.fixedFrame = Object.freeze({
+            centerX: 400,
+            centerY: 400,
+            width: 450,
+            height: 450
+        });
+        
+        // Drag state
+        this.isDragging = false;
+        this.dragOffset = { x: 0, y: 0 };
+        
+        // Prevent recursive updates
+        this.isUpdatingInput = false;
+        
+        // Guide visibility
+        this.showGuides = true;
+        this.snapThreshold = 15; // Snap distance in pixels
+        this.isSnapped = false;
+        
+        // UI Elements
+        this.positionIndicator = document.getElementById('positionIndicator');
+        this.deltaXEl = document.getElementById('deltaX');
+        this.deltaYEl = document.getElementById('deltaY');
+        this.distanceEl = document.getElementById('distanceValue');
+        this.guideToggle = document.getElementById('guideToggle');
+        
+        // Bind events
+        this.bindEvents();
+        
+        // Start animation loop
+        this.startAnimationLoop();
+        
+        // Load images
+        this.loadImages();
+    }
+    
+    startAnimationLoop() {
+        // Simple render - no continuous animation needed for fixed frame
+        this.render();
+    }
+    
+    hasMoved() {
+        return Math.abs(this.product.x - this.originalCenter.x) > 1 || 
+               Math.abs(this.product.y - this.originalCenter.y) > 1;
+    }
+    
+    bindEvents() {
+        const wrapper = document.getElementById('canvasWrapper');
+        
+        // Mouse events
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        document.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        document.addEventListener('mouseup', () => this.onMouseUp());
+        
+        // Touch events for mobile
+        this.canvas.addEventListener('touchstart', (e) => this.onTouchStart(e));
+        document.addEventListener('touchmove', (e) => this.onTouchMove(e));
+        document.addEventListener('touchend', () => this.onMouseUp());
+        
+        // Size inputs
+        document.getElementById('productWidth').addEventListener('input', (e) => this.onWidthChange(e));
+        document.getElementById('productHeight').addEventListener('input', (e) => this.onHeightChange(e));
+        
+        // Lock ratio checkbox - update aspect ratio when toggled
+        document.getElementById('lockAspectRatio').addEventListener('change', (e) => this.onLockRatioToggle(e));
+        
+        // Guide toggle
+        this.guideToggle.addEventListener('click', () => this.toggleGuides());
+    }
+    
+    onLockRatioToggle(e) {
+        // When lock is turned ON, update aspect ratio based on current dimensions
+        if (e.target.checked && this.product.width > 0 && this.product.height > 0) {
+            this.product.aspectRatio = this.product.width / this.product.height;
+        }
+        // When lock is turned OFF, allow free resizing (aspect ratio will update on next change)
+    }
+    
+    toggleGuides() {
+        this.showGuides = !this.showGuides;
+        this.guideToggle.classList.toggle('active', this.showGuides);
+        this.render();
+    }
+    
+    updatePositionIndicator() {
+        const deltaX = Math.round(this.product.x - this.originalCenter.x);
+        const deltaY = Math.round(this.product.y - this.originalCenter.y);
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        this.isSnapped = distance < this.snapThreshold;
+        
+        // Update display
+        this.deltaXEl.textContent = (deltaX >= 0 ? '+' : '') + deltaX;
+        this.deltaYEl.textContent = (deltaY >= 0 ? '+' : '') + deltaY;
+        this.distanceEl.textContent = Math.round(distance);
+        
+        // Toggle snapped state
+        this.positionIndicator.classList.toggle('snapped', this.isSnapped);
+        
+        // Show/hide based on dragging or moved state
+        const shouldShow = this.isDragging || this.hasMoved();
+        this.positionIndicator.classList.toggle('visible', shouldShow);
+    }
+    
+    getCanvasCoords(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = 800 / rect.width;
+        const scaleY = 800 / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+    
+    isPointInProduct(x, y) {
+        const halfW = this.product.width / 2;
+        const halfH = this.product.height / 2;
+        return x >= this.product.x - halfW && 
+               x <= this.product.x + halfW &&
+               y >= this.product.y - halfH && 
+               y <= this.product.y + halfH;
+    }
+    
+    onMouseDown(e) {
+        const coords = this.getCanvasCoords(e);
+        if (this.isPointInProduct(coords.x, coords.y)) {
+            this.isDragging = true;
+            this.dragOffset.x = coords.x - this.product.x;
+            this.dragOffset.y = coords.y - this.product.y;
+            this.canvas.style.cursor = 'grabbing';
+        }
+    }
+    
+    onMouseMove(e) {
+        if (!this.isDragging) return;
+        
+        const coords = this.getCanvasCoords(e);
+        this.product.x = coords.x - this.dragOffset.x;
+        this.product.y = coords.y - this.dragOffset.y;
+        
+        // Snap to center if within threshold
+        const deltaX = Math.abs(this.product.x - this.originalCenter.x);
+        const deltaY = Math.abs(this.product.y - this.originalCenter.y);
+        
+        if (deltaX < this.snapThreshold && deltaY < this.snapThreshold) {
+            // Visual snap - make it easier to align to center
+            if (deltaX < 5) this.product.x = this.originalCenter.x;
+            if (deltaY < 5) this.product.y = this.originalCenter.y;
+        }
+        
+        // Keep within bounds
+        const halfW = this.product.width / 2;
+        const halfH = this.product.height / 2;
+        this.product.x = Math.max(halfW, Math.min(800 - halfW, this.product.x));
+        this.product.y = Math.max(halfH, Math.min(800 - halfH, this.product.y));
+        
+        // Update position indicator
+        this.updatePositionIndicator();
+        
+        this.render();
+    }
+    
+    onMouseUp() {
+        this.isDragging = false;
+        this.canvas.style.cursor = 'move';
+        
+        // Keep indicator visible if moved from original position
+        setTimeout(() => {
+            if (!this.hasMoved()) {
+                this.positionIndicator.classList.remove('visible');
+            }
+        }, 100);
+    }
+    
+    onTouchStart(e) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
+    }
+    
+    onTouchMove(e) {
+        if (!this.isDragging) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+    }
+    
+    onWidthChange(e) {
+        // Prevent recursive updates
+        if (this.isUpdatingInput) return;
+        
+        const newWidth = parseInt(e.target.value) || 500;
+        const lockRatio = document.getElementById('lockAspectRatio').checked;
+        
+        // Clamp to valid range
+        const clampedWidth = Math.max(50, Math.min(700, newWidth));
+        if (clampedWidth !== newWidth) {
+            this.isUpdatingInput = true;
+            e.target.value = clampedWidth;
+            this.isUpdatingInput = false;
+        }
+        
+        this.product.width = clampedWidth;
+        
+        if (lockRatio) {
+            // Lock aspect ratio: adjust height based on width
+            this.product.height = Math.round(clampedWidth / this.product.aspectRatio);
+            // Update height input without triggering its change event
+            this.isUpdatingInput = true;
+            document.getElementById('productHeight').value = this.product.height;
+            this.isUpdatingInput = false;
+        } else {
+            // Free resize: update aspect ratio based on current dimensions
+            if (this.product.height > 0) {
+                this.product.aspectRatio = this.product.width / this.product.height;
+            }
+        }
+        
+        this.render();
+    }
+    
+    onHeightChange(e) {
+        // Prevent recursive updates
+        if (this.isUpdatingInput) return;
+        
+        const newHeight = parseInt(e.target.value) || 500;
+        const lockRatio = document.getElementById('lockAspectRatio').checked;
+        
+        // Clamp to valid range
+        const clampedHeight = Math.max(50, Math.min(700, newHeight));
+        if (clampedHeight !== newHeight) {
+            this.isUpdatingInput = true;
+            e.target.value = clampedHeight;
+            this.isUpdatingInput = false;
+        }
+        
+        this.product.height = clampedHeight;
+        
+        if (lockRatio) {
+            // Lock aspect ratio: adjust width based on height
+            this.product.width = Math.round(clampedHeight * this.product.aspectRatio);
+            // Update width input without triggering its change event
+            this.isUpdatingInput = true;
+            document.getElementById('productWidth').value = this.product.width;
+            this.isUpdatingInput = false;
+        } else {
+            // Free resize: update aspect ratio based on current dimensions
+            if (this.product.width > 0) {
+                this.product.aspectRatio = this.product.width / this.product.height;
+            }
+        }
+        
+        this.render();
+    }
+    
+    async loadImages() {
+        try {
+            // Load background
+            this.backgroundImg = await this.loadImage('/backgrounds/background.jpg');
+            
+            // Load product image
+            this.productImg = await this.loadImage('{{ submission.product_image.url }}');
+            
+            // Calculate initial product size maintaining aspect ratio
+            const maxSize = 500;
+            if (this.productImg.width > this.productImg.height) {
+                this.product.width = maxSize;
+                this.product.height = Math.round((this.productImg.height * maxSize) / this.productImg.width);
+            } else {
+                this.product.height = maxSize;
+                this.product.width = Math.round((this.productImg.width * maxSize) / this.productImg.height);
+            }
+            this.product.originalWidth = this.product.width;
+            this.product.originalHeight = this.product.height;
+            this.product.aspectRatio = this.product.width / this.product.height;
+            
+            // Update original center reference to match initial position
+            this.originalCenter.x = this.product.x;
+            this.originalCenter.y = this.product.y;
+            
+            // Fixed frame dimensions are always 450x450 (already set in constructor)
+            
+            // Update input fields
+            document.getElementById('productWidth').value = this.product.width;
+            document.getElementById('productHeight').value = this.product.height;
+            
+            // Load pictos
+            const pictoData = {{ picto_data|safe }};
+            
+            for (const picto of pictoData.vertical || []) {
+                try {
+                    const img = await this.loadImage(picto.url);
+                    this.verticalPictos.push({ img, x: picto.x, y: picto.y });
+                } catch (e) {
+                    console.warn('Failed to load vertical picto:', picto.url);
+                }
+            }
+            
+            for (const picto of pictoData.horizontal || []) {
+                try {
+                    const img = await this.loadImage(picto.url);
+                    this.horizontalPictos.push({ img, x: picto.x, y: picto.y });
+                } catch (e) {
+                    console.warn('Failed to load horizontal picto:', picto.url);
+                }
+            }
+            
+            // Initial render
+            this.render();
+            
+        } catch (error) {
+            console.error('Error loading images:', error);
+        }
+    }
+    
+    loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src;
+        });
+    }
+    
+    resizePicto(img, maxSize = 100) {
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height) {
+            if (width > maxSize) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+            }
+        } else {
+            if (height > maxSize) {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
+            }
+        }
+        
+        return { width, height };
+    }
+    
+    render() {
+        // Clear canvas
+        this.ctx.clearRect(0, 0, 800, 800);
+        
+        // Draw background
+        if (this.backgroundImg) {
+            this.ctx.drawImage(this.backgroundImg, 0, 0, 800, 800);
+        } else {
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.fillRect(0, 0, 800, 800);
+        }
+        
+        // Draw product (centered at x,y)
+        if (this.productImg) {
+            const drawX = this.product.x - this.product.width / 2;
+            const drawY = this.product.y - this.product.height / 2;
+            
+            // Save context state
+            this.ctx.save();
+            
+            if (this.product.flipped) {
+                // Flip horizontally around the center point (product.x, product.y)
+                // This keeps the image in the same position
+                this.ctx.translate(this.product.x, this.product.y);
+                this.ctx.scale(-1, 1);
+                this.ctx.translate(-this.product.x, -this.product.y);
+            }
+            
+            this.ctx.drawImage(this.productImg, drawX, drawY, this.product.width, this.product.height);
+            
+            // Restore context state
+            this.ctx.restore();
+        }
+        
+        // Draw vertical pictos
+        for (const picto of this.verticalPictos) {
+            const size = this.resizePicto(picto.img, 104);
+            this.ctx.drawImage(picto.img, picto.x, picto.y, size.width, size.height);
+        }
+        
+        // Draw horizontal pictos
+        for (const picto of this.horizontalPictos) {
+            const size = this.resizePicto(picto.img, 104);
+            this.ctx.drawImage(picto.img, picto.x, picto.y, size.width, size.height);
+        }
+        
+        // Draw original center reference frame - ON TOP so it's always visible
+        this.drawCenterReferenceFrame();
+    }
+    
+    drawCenterReferenceFrame() {
+        if (!this.showGuides) return;
+        
+        // FIXED frame values - ALWAYS 450x450, NEVER changes regardless of image dimensions
+        // These values are hardcoded and will NEVER be affected by product image dimensions
+        const centerX = 400;  // Fixed center X coordinate
+        const centerY = 400;  // Fixed center Y coordinate
+        const frameW = 450;   // Fixed width - ALWAYS 450 pixels
+        const frameH = 450;   // Fixed height - ALWAYS 450 pixels
+        
+        // Frame color - BRIGHT RED for maximum visibility
+        const frameColor = '#ff0000';
+        
+        // Save context state
+        this.ctx.save();
+        
+        // ===== FIXED BORDER FRAME - Always 450x450 square =====
+        const frameX = centerX - frameW / 2;  // 400 - 225 = 175
+        const frameY = centerY - frameH / 2;  // 400 - 225 = 175
+        
+        // Draw the frame border - THICK RED LINE for maximum visibility
+        this.ctx.strokeStyle = frameColor;
+        this.ctx.lineWidth = 5; // Very thick for visibility
+        this.ctx.globalAlpha = 1.0; // Full opacity
+        this.ctx.lineJoin = 'miter';
+        this.ctx.miterLimit = 10;
+        
+        // Draw the fixed 450x450 rectangle - this NEVER changes
+        this.ctx.beginPath();
+        this.ctx.rect(frameX, frameY, frameW, frameH);
+        this.ctx.stroke();
+        
+        // Draw again with rounded corners for better appearance
+        const cornerRadius = 8;
+        this.ctx.beginPath();
+        this.roundRect(frameX, frameY, frameW, frameH, cornerRadius);
+        this.ctx.stroke();
+        
+        // ===== CENTER CROSSHAIR - Small "+" marker =====
+        const crossSize = 15; // Larger for visibility
+        
+        this.ctx.strokeStyle = frameColor;
+        this.ctx.lineWidth = 4; // Thick for visibility
+        this.ctx.lineCap = 'round';
+        
+        // Horizontal line
+        this.ctx.beginPath();
+        this.ctx.moveTo(centerX - crossSize, centerY);
+        this.ctx.lineTo(centerX + crossSize, centerY);
+        this.ctx.stroke();
+        
+        // Vertical line
+        this.ctx.beginPath();
+        this.ctx.moveTo(centerX, centerY - crossSize);
+        this.ctx.lineTo(centerX, centerY + crossSize);
+        this.ctx.stroke();
+        
+        // Restore context state
+        this.ctx.restore();
+    }
+    
+    // Helper: rounded rectangle
+    roundRect(x, y, w, h, r) {
+        this.ctx.moveTo(x + r, y);
+        this.ctx.lineTo(x + w - r, y);
+        this.ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        this.ctx.lineTo(x + w, y + h - r);
+        this.ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        this.ctx.lineTo(x + r, y + h);
+        this.ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        this.ctx.lineTo(x, y + r);
+        this.ctx.quadraticCurveTo(x, y, x + r, y);
+    }
+    
+    reset() {
+        this.product.x = this.originalCenter.x;
+        this.product.y = this.originalCenter.y;
+        this.product.width = this.product.originalWidth;
+        this.product.height = this.product.originalHeight;
+        this.product.flipped = false;  // Reset flip state
+        
+        document.getElementById('productWidth').value = this.product.width;
+        document.getElementById('productHeight').value = this.product.height;
+        
+        // Update mirror button state
+        const mirrorBtn = document.getElementById('mirrorBtn');
+        if (mirrorBtn) {
+            mirrorBtn.classList.remove('active');
+        }
+        
+        // Hide position indicator
+        this.positionIndicator.classList.remove('visible', 'snapped');
+        
+        this.render();
+    }
+    
+    flipHorizontal() {
+        // Toggle flip state
+        this.product.flipped = !this.product.flipped;
+        
+        // Update button visual state
+        const mirrorBtn = document.getElementById('mirrorBtn');
+        if (mirrorBtn) {
+            mirrorBtn.classList.toggle('active', this.product.flipped);
+        }
+        
+        // Re-render with new flip state
+        this.render();
+    }
+    
+    downloadCustom() {
+        // Get filename from user
+        const userFilename = prompt('Enter filename for custom download:', 'custom_result');
+        if (userFilename === null) return;
+        
+        const cleanFilename = userFilename.replace(/[<>:"/\\|?*]/g, '_').trim();
+        if (!cleanFilename) {
+            alert('Filename cannot be empty!');
+            return;
+        }
+        
+        const finalFilename = cleanFilename.endsWith('.webp') ? cleanFilename : cleanFilename + '.webp';
+        
+        // Temporarily hide guides for clean export
+        const guidesWereVisible = this.showGuides;
+        this.showGuides = false;
+        this.render();
+        
+        // Export canvas
+        this.canvas.toBlob((blob) => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = finalFilename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Restore guides visibility
+            this.showGuides = guidesWereVisible;
+            this.render();
+        }, 'image/webp', 0.95);
+    }
+}
+
+// Initialize preview editor when DOM is ready
+let previewEditor;
+document.addEventListener('DOMContentLoaded', function() {
+    previewEditor = new PreviewEditor('previewCanvas', {});
+});
+</script>
+{% endblock %}
+
